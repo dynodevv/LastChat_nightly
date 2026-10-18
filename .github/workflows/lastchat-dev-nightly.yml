@@ -1,96 +1,48 @@
-name: LastChat Dev Nightly
+name: Build Dev APK (Nightly & Manual)
 
 on:
-  schedule:
-    - cron: '0 0 * * *'
   workflow_dispatch:
+  schedule:
+    - cron: "0 0 * * *"
   push:
     branches:
-      - lastchat_dev
+      - LastChat_dev
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  sync-and-build:
+  build-dev-apk:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout lastchat_dev
+      - name: Checkout
         uses: actions/checkout@v4
-        with:
-          ref: lastchat_dev
-          fetch-depth: 0
-
-      - name: Sync fork branch with upstream
-        id: sync
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-
-          repo_json="$(gh api "repos/${GITHUB_REPOSITORY}")"
-          is_fork="$(jq -r '.fork' <<<"$repo_json")"
-
-          if [ "$is_fork" != "true" ]; then
-            echo "This repository is not a fork; cannot sync from parent."
-            exit 1
-          fi
-
-          upstream_url="$(jq -r '.parent.clone_url // empty' <<<"$repo_json")"
-          upstream_branch="$(jq -r '.parent.default_branch // "main"' <<<"$repo_json")"
-
-          if [ -z "$upstream_url" ]; then
-            echo "Parent repository URL is missing."
-            exit 1
-          fi
-
-          before_sha="$(git rev-parse HEAD)"
-
-          git remote add upstream "$upstream_url" 2>/dev/null || git remote set-url upstream "$upstream_url"
-          git fetch --no-tags upstream "$upstream_branch"
-          git merge --no-edit "upstream/$upstream_branch"
-
-          after_sha="$(git rev-parse HEAD)"
-
-          if [ "$before_sha" = "$after_sha" ]; then
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-            echo "No upstream changes to sync."
-            exit 0
-          fi
-
-          git push origin HEAD:lastchat_dev
-          echo "changed=true" >> "$GITHUB_OUTPUT"
 
       - name: Set up JDK 17
-        if: steps.sync.outputs.changed == 'true'
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: "17"
           cache: gradle
 
       - name: Set up Node.js
-        if: steps.sync.outputs.changed == 'true'
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: "22"
           cache: npm
           cache-dependency-path: web-ui/package-lock.json
 
       - name: Install web UI dependencies
-        if: steps.sync.outputs.changed == 'true'
         working-directory: web-ui
         run: npm ci
 
       - name: Build dev debug APK
-        if: steps.sync.outputs.changed == 'true'
         run: |
           chmod +x gradlew
           ./gradlew :app:assembleDevDebug
 
       - name: Upload dev debug APK
-        if: steps.sync.outputs.changed == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: lastchat-dev-debug-apk
