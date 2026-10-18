@@ -98,6 +98,7 @@ android {
         create("dev") {
             dimension = "version"
             applicationIdSuffix = ".dev"
+            resValue("string", "app_name", "LastChat Dev")
         }
     }
 
